@@ -1,0 +1,142 @@
+buildscript {
+    ext.kotlin_coroutines = '1.2.2'
+    ext.kotlin_version = '1.3.41'
+    ext.vertx_version = '3.7.1'
+
+    repositories {
+        jcenter()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:5.1.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+def versionObj = new Version(major: 0, minor: 1, revision: 0)
+
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'kotlin'
+
+allprojects {
+    group 'chat.union.apiengine'
+    version versionObj.toString()
+}
+
+repositories {
+    mavenCentral()
+    jcenter()
+    maven { url 'https://jitpack.io' }
+    maven { url "https://dl.bintray.com/kotlin/ktor" }
+}
+
+configurations { ktlint }
+
+dependencies {
+    ktlint "com.pinterest:ktlint:0.33.0"
+    implementation 'io.sentry:sentry-logback:1.7.23'
+    implementation 'ch.qos.logback:logback-classic:1.2.3'
+
+    implementation 'xyz.bowser65:Tokenize:678e05d897'
+    implementation 'de.mkammerer:argon2-jvm:2.5'
+
+    // The MongoDB drivers are literal trash. Async driver is deprecated, reactivestreams is painful
+    // to use and sync driver is sync, but at least "usable". @devoxin make Kongo a thing when:tm:
+    implementation 'org.mongodb:mongodb-driver-sync:3.10.2'
+    implementation 'io.lettuce:lettuce-core:5.1.7.RELEASE'
+
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlin_coroutines"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$kotlin_coroutines"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+    //  --- Web servers pre-made adapters ---
+    // Vert.x
+    compileOnly "io.vertx:vertx-web:$vertx_version"
+    compileOnly "io.vertx:vertx-lang-kotlin:$vertx_version"
+    compileOnly "io.vertx:vertx-lang-kotlin-coroutines:$vertx_version"
+
+    // Ktor
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8
+}
+
+task ktlint(type: JavaExec, group: "verification") {
+    description = "Check Kotlin code style."
+    classpath = configurations.ktlint
+    main = "com.pinterest.ktlint.Main"
+    args "src/**/*.kt"
+}
+
+task ktlintFormat(type: JavaExec, group: "formatting") {
+    description = "Fix Kotlin code style deviations."
+    classpath = configurations.ktlint
+    main = "com.pinterest.ktlint.Main"
+    args "-F", "src/**/*.kt"
+}
+
+import org.apache.tools.ant.filters.ReplaceTokens
+
+//noinspection GroovyAssignabilityCheck
+task sourcesForRelease(type: Copy) {
+    outputs.upToDateWhen { false }
+
+    from('src/main/kotlin') {
+        include '**/Version.java'
+        filter(ReplaceTokens, tokens: [
+                VERSION_MAJOR   : versionObj.major,
+                VERSION_MINOR   : versionObj.minor,
+                VERSION_REVISION: versionObj.revision,
+                COMMIT          : getCommitHash(),
+        ])
+    }
+    into 'build/filteredSrc'
+
+    includeEmptyDirs = false
+}
+
+//noinspection GroovyAssignabilityCheck
+task generateJavaSources(type: SourceTask) {
+    outputs.upToDateWhen { false }
+
+    def javaSources = sourceSets.main.allJava.filter {
+        it.name != 'Version.java'
+    }
+    source = javaSources + sourcesForRelease.destinationDir
+
+    dependsOn sourcesForRelease
+}
+
+compileJava {
+    outputs.upToDateWhen { false }
+
+    source = generateJavaSources.source
+    dependsOn generateJavaSources
+}
+
+shadowJar {
+    version = versionObj.toString()
+}
+
+class Version {
+    String major, minor, revision
+
+    String toString() {
+        "$major.$minor.$revision"
+    }
+}
+
+static def getCommitHash() {
+    def p = Runtime.getRuntime().exec("git rev-parse HEAD")
+    p.waitFor()
+    p.getIn().text.trim()
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8

@@ -1,0 +1,22 @@
+# JetBrains
+.idea
+
+# Gradle
+.gradle
+build
+out
+
+# Env
+config.properties
+
+# My stuff
+*.nogit.*
+*.log
+ktlint
+
+# RSA private keys
+.travisci/private_rsa_keys.tar.gz
+
+# Email related
+email/node_modules
+src/main/resources/email/html
