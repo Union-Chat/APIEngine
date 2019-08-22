@@ -1,5 +1,3 @@
 package chat.union.apiengine
 
-internal class Engine {
-
-}
+class Engine(val options: EngineOptions = EngineOptions())
