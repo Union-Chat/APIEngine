@@ -9,8 +9,13 @@ class Hello : AbstractModule("v2_hello_world", 2) {
 
     }
 
-    @Route("v2_root", "/coffee")
+    @Route("v2_coffee", "/coffee")
     fun coffee(ctx: RequestContext) {
+
+    }
+
+    @Route("v2_suspend", "/coffee")
+    suspend fun coffeee(ctx: RequestContext) {
 
     }
 }
